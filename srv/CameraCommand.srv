@@ -1,0 +1,4 @@
+# new goal position request
+int8 command
+---
+# response
