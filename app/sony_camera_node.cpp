@@ -147,7 +147,7 @@ int main(int argc, char **argv)
         camera.get_image_data(image_data, image_buff);
         ROS_INFO_STREAM("image data size = " << (int)image_data->GetSize());
 
-        ROS_INFO_STREAM("command value = " << (int)camera_control.get_control_value());
+        ROS_INFO_STREAM("test command value = " << (int)camera_control.get_control_value());
 
         if (0 == camera_control.get_control_value()) {
             if (camera.connected()) {

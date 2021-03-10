@@ -39,7 +39,7 @@ int main(int argc, char **argv)
     // instantiate a service to be called to save an image to file
     //
     ros::ServiceServer camera_command_service = nh.advertiseService(
-                "uvc_camera_node/camera_command",
+                "sony_camera_node/camera_command",
                 &CameraControl::callback,
                 &camera_control);
     //
@@ -117,7 +117,7 @@ int main(int argc, char **argv)
                 cv::destroyAllWindows();
             }
         }
-        ROS_INFO_STREAM("command value = " << (int)camera_control.get_control_value());
+        ROS_INFO_STREAM("test command value = " << (int)camera_control.get_control_value());
         if (0 == camera_control.get_control_value()) {
             //
             // prepare for shutdown
@@ -142,7 +142,7 @@ int main(int argc, char **argv)
             std::string homedir = getenv("HOME");
             std::stringstream path_ss;
             path_ss << homedir;
-            path_ss << "/catkin_ws/saved_image_";
+            path_ss << "/catkin_ws_test/saved_image_";
             path_ss << image_count;
             path_ss << ".jpg";
             std::string path;
