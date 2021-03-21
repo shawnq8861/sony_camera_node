@@ -67,7 +67,7 @@ int main(int argc, char **argv)
     //
     // shared file names
     //
-    std::string base_path = "/catkin_ws_test/";
+    std::string base_path = "/catkin_ws/";
     std::string image1_name = "optical_flow_image_1.jpg";
     std::string image2_name = "optical_flow_image_2.jpg";
     std::string gray1_name = "gray_image_1.jpg";
@@ -294,23 +294,6 @@ int main(int argc, char **argv)
             //
             // create ORB detector to find corners in first image
             //
-            //std::vector<cv::Point2f> points1;
-            //const int max_corners = 500;
-            //const double quality_level = .03;
-            //const double min_distance = 10.0;
-            //const int block_size = 5;
-            //bool use_harris = true;
-            //double harris_free_parameter = .04;
-            //cv::goodFeaturesToTrack(gray1,
-            //                        points1,
-            //                        max_corners,
-            //                        quality_level,
-            //                        min_distance,
-            //                        cv::noArray(),
-            //                        block_size,
-            //                        use_harris,
-            //                        harris_free_parameter
-            //                        );
             int 	n_features = max_points;
             float 	scale_factor = 1.2f;
             int 	n_levels = 8;

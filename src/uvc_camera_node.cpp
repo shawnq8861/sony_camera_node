@@ -142,7 +142,7 @@ int main(int argc, char **argv)
             std::string homedir = getenv("HOME");
             std::stringstream path_ss;
             path_ss << homedir;
-            path_ss << "/catkin_ws_test/saved_image_";
+            path_ss << "/catkin_ws/saved_image_";
             path_ss << image_count;
             path_ss << ".jpg";
             std::string path;
