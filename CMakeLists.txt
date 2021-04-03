@@ -115,6 +115,8 @@ add_executable(sub_node src/sub_node.cpp)
 add_executable(camera_interface_node src/camera_interface_node.cpp)
 add_executable(uvc_camera_node src/uvc_camera_node.cpp)
 add_executable(optical_flow_node src/optical_flow_node.cpp)
+add_executable(visual_odometry_node src/visual_odometry_node.cpp)
+add_executable(live_img_vis_odom_node src/live_img_vis_odom_node.cpp)
 
 set_target_properties(${sony_camera_node} PROPERTIES
     CXX_STANDARD 17
@@ -187,6 +189,16 @@ target_link_libraries(uvc_camera_node
 	${OpenCV_LIBRARIES}
 )
 target_link_libraries(optical_flow_node 
+	${catkin_LIBRARIES} 
+	${OpenCV_LIBRARIES}
+)
+
+target_link_libraries(visual_odometry_node 
+	${catkin_LIBRARIES} 
+	${OpenCV_LIBRARIES}
+)
+
+target_link_libraries(live_img_vis_odom_node 
 	${catkin_LIBRARIES} 
 	${OpenCV_LIBRARIES}
 )

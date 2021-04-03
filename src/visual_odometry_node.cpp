@@ -3,6 +3,7 @@
 #include <opencv4/opencv2/video/tracking.hpp>
 #include <opencv4/opencv2/features2d.hpp>
 #include <opencv4/opencv2/core/matx.hpp>
+#include <opencv4/opencv2/calib3d/calib3d.hpp>
 #include <iostream>
 #include <stdio.h>
 #include <string>
@@ -16,7 +17,7 @@ int main(int argc, char **argv)
     //
     // initialize ROS and create unique node name
     //
-    ros::init(argc, argv, "optical_flow_node");
+    ros::init(argc, argv, "visual_odometry_node");
     //
     // declare a node handle
     //
@@ -41,7 +42,7 @@ int main(int argc, char **argv)
     // instantiate a service to be called to save an image to file
     //
     ros::ServiceServer camera_command_service = nh.advertiseService(
-                "optical_flow_node/camera_command",
+                "visual_odometry_node/camera_command",
                 &CameraControl::callback,
                 &camera_control);
     //
@@ -68,8 +69,8 @@ int main(int argc, char **argv)
     // shared file names
     //
     std::string base_path = "/catkin_ws/";
-    std::string image1_name = "optical_flow_image_1.jpg";
-    std::string image2_name = "optical_flow_image_2.jpg";
+    std::string image1_name = "visual_odometry_image_1.jpg";
+    std::string image2_name = "visual_odometry_image_2.jpg";
     std::string gray1_name = "gray_image_1.jpg";
     std::string gray2_name = "gray_image_2.jpg";
     std::string homedir = getenv("HOME");
@@ -92,13 +93,13 @@ int main(int argc, char **argv)
             cv::destroyAllWindows();
         }
         ROS_INFO_STREAM("command value = " << (int)camera_control.get_control_value());
-        if (20 == camera_control.get_control_value()) {
+        if (30 == camera_control.get_control_value()) {
             //
             // prepare for shutdown
             //
             loop_count = -2;
         }
-        else if (21 == camera_control.get_control_value()) {
+        else if (31 == camera_control.get_control_value()) {
             //
             // toggle display of live image
             //
@@ -109,7 +110,7 @@ int main(int argc, char **argv)
                 show = true;
             }
         }
-        else if (22 == camera_control.get_control_value()) {
+        else if (32 == camera_control.get_control_value()) {
             //
             // save image to file, default compression
             //
@@ -133,141 +134,11 @@ int main(int argc, char **argv)
                 image_count = 1;
             }
         }
-        else if (23 == camera_control.get_control_value()) {
+        else if (34 == camera_control.get_control_value()) {
             //
-            // run optical flow with corner detector
+            // visual odometry by pose extraction from feature correspondence
             //
-            // Steps
-            // 1) read image 1 from file
-            // 2) convert image 1 to grayscale
-            // 3) find good features to track
-            // 4) refine to subpixel corners
-            // 5) read image 2 from file
-            // 6) convert to grayscale
-            // 7) calculate pyramid LK optical flow
-            // 8) calculate lines between matching points and overlay line 
-            //    on first image
-            //          
-            std::stringstream path1_ss;
-            path1_ss << homedir;
-            path1_ss << base_path;
-            path1_ss << image1_name;
-            std::string path1;
-            path1_ss >> path1;
-            //
-            // read image 1, convert to grayscale
-            //
-            cv::Mat image1 = cv::imread(path1);
-            cv::Mat gray1;
-            cv::cvtColor(image1, gray1, cv::COLOR_BGR2GRAY);
-            //
-            // call good features to track to find corners in first image
-            //
-            std::vector<cv::Point2f> points1;
-            const int max_corners = max_points;
-            const double quality_level = .03;
-            const double min_distance = 10.0;
-            const int block_size = 5;
-            bool use_harris = true;
-            double harris_free_parameter = .04;
-            cv::goodFeaturesToTrack(gray1,
-                                    points1,
-                                    max_corners,
-                                    quality_level,
-                                    min_distance,
-                                    cv::noArray(),
-                                    block_size,
-                                    use_harris,
-                                    harris_free_parameter
-                                    );
-            //
-            // refine pixel locations to subpixel accuracy
-            //
-            // set the half side length of the search window to 10
-            // for a 20 x 20 search window
-            //
-            const int max_count = 20;
-            double epsilon = .03;
-            cv::TermCriteria term_crit = cv::TermCriteria(
-                        cv::TermCriteria::MAX_ITER | cv::TermCriteria::EPS,
-                        max_count,
-                        epsilon);
-            const int search_win_size = 10;
-            cv::cornerSubPix(gray1,
-                            points1,
-                            cv::Size(search_win_size, search_win_size),
-                            cv::Size(-1, -1),
-                            term_crit
-                            );
-            std::stringstream path2_ss;
-            path2_ss << homedir;
-            path2_ss << base_path;
-            path2_ss << image2_name;
-            std::string path2;
-            path2_ss >> path2;
-            //
-            // read image 2, convert to grayscale
-            //
-            cv::Mat image2 = cv::imread(path2);
-            cv::Mat gray2;
-            cv::cvtColor(image2, gray2, cv::COLOR_BGR2GRAY);
-            //
-            // call pyramid Lucas Kanade
-            //
-            int max_pyramid_level = 5;
-                epsilon = .3;
-                term_crit = cv::TermCriteria(
-                            cv::TermCriteria::MAX_ITER | cv::TermCriteria::EPS,
-                            max_count,
-                            epsilon);
-            std::vector<cv::Point2f> new_points;
-            std::vector<uchar> flow_found_status;
-            cv::calcOpticalFlowPyrLK(gray1,
-                                    gray2,
-                                    points1,
-                                    new_points,
-                                    flow_found_status,
-                                    cv::noArray(),
-                                    cv::Size(search_win_size * 2 + 1,
-                                            search_win_size * 2 + 1),
-                                    max_pyramid_level,
-                                    term_crit
-                                    );
-
-            cv::Scalar line_color(0, 0, 255);
-            int line_thickness = 5;
-            int line_type = cv::LINE_AA;
-            //
-            // only keep points when flow was found
-            //
-            for (int i = 0;
-                i < static_cast<int>(points1.size());
-                ++i) {
-                if (flow_found_status[i] == 1) {
-                    cv::line(image1,
-                            points1[i],
-                            new_points[i],
-                            line_color,
-                            line_thickness,
-                            line_type
-                            );
-                }
-                else {
-                    continue;
-                }
-            }
-            std::string corner_tracked_name = "corner_tracked_image.jpg";
-            std::stringstream tracked_ss;
-            tracked_ss << homedir;
-            tracked_ss << base_path;
-            tracked_ss << corner_tracked_name;
-            std::string tracked_path;
-            tracked_ss >> tracked_path;
-            cv::imwrite(tracked_path, image1);
-        }
-        else if (24 == camera_control.get_control_value()) {
-            //
-            // run optical flow with ORB detector
+            // first, run optical flow with ORB detector
             //
             // Steps
             // 1) read image 1 from file
@@ -358,8 +229,8 @@ int main(int argc, char **argv)
             // call pyramid Lucas Kanade
             //
             int max_pyramid_level = 5;
-                epsilon = .3;
-                term_crit = cv::TermCriteria(
+            epsilon = .3;
+            term_crit = cv::TermCriteria(
                             cv::TermCriteria::MAX_ITER | cv::TermCriteria::EPS,
                             max_count,
                             epsilon);
@@ -431,11 +302,16 @@ int main(int argc, char **argv)
             // not match closely enough, based on L2 norm()
             //
             auto max_rows = std::min(descriptors1.rows, descriptors2.rows);
+            //
+            // initialize row to 0, auto type
+            //
             auto row = max_rows - max_rows;
             const double threshold = 250.0;
             line_color = cv::Scalar(0, 255, 0);
             cv::Mat image3 = cv::imread(path2);
             double delta_x_sum = 0.0;
+            std::vector<cv::Point2f> points1_final;
+            std::vector<cv::Point2f> points2_final;
             int count = 0;
             for (row = 0; row < max_rows; ++row) {
                     cv::Mat row_mat1 = descriptors1.row(row);
@@ -456,13 +332,8 @@ int main(int argc, char **argv)
                         ++count;
                         delta_x_sum += (abs(x2 - x1));
                         if (delta_y < threshold) {
-                            cv::line(image3,
-                            points1_trim[row],
-                            points2_trim[row],
-                            line_color,
-                            line_thickness,
-                            line_type
-                            );
+                            points1_final.push_back(points1_trim[row]);
+                            points2_final.push_back(points2_trim[row]);
                         }
                     }
                     else {
@@ -472,10 +343,6 @@ int main(int argc, char **argv)
             double delta_x_ave = delta_x_sum/(double)count;
             double img_width = (double)image3.cols;
             double percent_overlap = 100.0 * (img_width - delta_x_ave)/img_width;
-            cv::Point top = cv::Point(delta_x_ave, 0.0);
-            cv::Point bottom = cv::Point(delta_x_ave, (double)image3.rows);
-            line_color = cv::Scalar(255, 0, 0);
-            cv::line(image3, top, bottom, line_color, line_thickness, line_type);
             std::string orb_tracked_trim_name = "orb_tracked_image_trim.jpg";
             std::stringstream tracked_trim_ss;
             tracked_trim_ss << homedir;
@@ -484,6 +351,120 @@ int main(int argc, char **argv)
             std::string tracked_trim_path;
             tracked_trim_ss >> tracked_trim_path;
             cv::imwrite(tracked_trim_path, image3);
+            //
+            // calculate the essential matrix
+            //
+
+            //
+            // calculate the essential matrix for the 2 images and
+            // corresponding camera poses.
+            // the mask values are 0 if the point pair is an outlier,
+            // and 1 if the point pair is an inlier
+            //
+            cv::Mat camera_matrix;
+            cv::Mat dist_coeffs;
+            //
+            // reading intrinsic parameters
+            //
+            std::cout << "reading camera intrinsics..." << std::endl;
+            cv::FileStorage fs("intrinsics.yaml", cv::FileStorage::READ);
+            if(!fs.isOpened()) {
+                ROS_INFO_STREAM("camera not calibrated");
+            }
+            else {
+                fs["camera_matrix"] >> camera_matrix;
+                fs["dist_coeffs"] >> dist_coeffs;
+                fs.release();
+                cv::Mat inlier_mask;
+                std::cout << "calculating essential matrix..." << std::endl;
+                cv::Mat essential_mat = cv::findEssentialMat(points1,
+                                                             points2,
+                                                             camera_matrix,
+                                                             cv::RANSAC,
+                                                             .99,
+                                                             1.0,
+                                                             inlier_mask);    
+                //
+                // determine the realtive rotation matrix, R, and relative 
+                // translation matrix, T between the 2 camera positions.
+                //
+                // this function allows us to retrieve the triangulated object points.
+                //
+                cv::Mat rotation_mat;
+                cv::Mat translation_mat;
+                double distance_threshold = 10.0;
+                //
+                // define a matrix to hold triangulated 3D object points
+                //
+                cv::Mat object_points;
+                //
+                // several versions of this function exist. we will use the 
+                // version that triangulates the object points
+                //
+                int num_good_inliers = cv::recoverPose(essential_mat,
+                                                       points1,
+                                                       points2,
+                                                       camera_matrix,
+                                                       rotation_mat,
+                                                       translation_mat,
+                                                       distance_threshold,
+                                                       cv::noArray(),
+                                                       object_points);
+                if (num_good_inliers < 1) {
+                    std::cout << "pose recovery failed..." << std::endl;
+                }
+                //
+                // refine the camera pose for each image
+                //
+                // we can call one of the solvePNPRefine functions:
+                // solvePnPRefineLM uses the Levenberg-Marquard iterative algorithm.
+                // solvePnPRefineVVS() uses a virtual visual servoing scheme.
+                //
+                // pass in the object points from pose recovery.
+                //
+                cv::Mat rot_mat1(rotation_mat);
+                cv::Mat trans_mat1(translation_mat);
+                epsilon = FLT_EPSILON;
+                term_crit = cv::TermCriteria(
+                            cv::TermCriteria::EPS + cv::TermCriteria::COUNT, 
+                            max_count, 
+                            epsilon);
+                cv::solvePnPRefineLM(object_points,
+                                     points1,
+                                     camera_matrix,
+                                     dist_coeffs,
+                                     rot_mat1,
+                                     trans_mat1,
+                                     term_crit
+                                     );
+                //
+                // repeat for the second image
+                //
+                cv::Mat rot_mat2(rot_mat1);
+                cv::Mat trans_mat2(trans_mat1);
+                cv::solvePnPRefineLM(object_points,
+                                     points1,
+                                     camera_matrix,
+                                     dist_coeffs,
+                                     rot_mat1,
+                                     trans_mat1,
+                                     term_crit
+                                     );
+                //
+                // extract camera motion from translation matrices
+                // 
+                // subtract trans_mat1 from trans_mat2, result is incremental
+                // camera motion
+                //
+                cv::Mat delta_trans = trans_mat2 - trans_mat1;
+                //
+                // parse specific elements of transalation if needed
+                // to determine motion along x or y axes
+                //
+                double x_trans = delta_trans.at<double>(0);
+                double y_trans = delta_trans.at<double>(1);
+            }
+            // end 
         }
         else {
             camera_control.set_control_value(idle);
