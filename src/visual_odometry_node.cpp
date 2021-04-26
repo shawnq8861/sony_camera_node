@@ -93,13 +93,13 @@ int main(int argc, char **argv)
             cv::destroyAllWindows();
         }
         ROS_INFO_STREAM("command value = " << (int)camera_control.get_control_value());
-        if (30 == camera_control.get_control_value()) {
+        if (40 == camera_control.get_control_value()) {
             //
             // prepare for shutdown
             //
             loop_count = -2;
         }
-        else if (31 == camera_control.get_control_value()) {
+        else if (41 == camera_control.get_control_value()) {
             //
             // toggle display of live image
             //
@@ -110,7 +110,7 @@ int main(int argc, char **argv)
                 show = true;
             }
         }
-        else if (32 == camera_control.get_control_value()) {
+        else if (42 == camera_control.get_control_value()) {
             //
             // save image to file, default compression
             //
@@ -134,7 +134,7 @@ int main(int argc, char **argv)
                 image_count = 1;
             }
         }
-        else if (34 == camera_control.get_control_value()) {
+        else if (44 == camera_control.get_control_value()) {
             //
             // visual odometry by pose extraction from feature correspondence
             //

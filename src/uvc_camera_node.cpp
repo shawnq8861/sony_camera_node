@@ -59,7 +59,7 @@ int main(int argc, char **argv)
     // set up video capture
     //
     cv::VideoCapture cap;
-    int deviceID = 2;             // 0 = open default camera
+    int deviceID = 0;             // 0 = open default camera
     int apiID = cv::CAP_ANY;      // 0 = autodetect default API
     //
     // open selected camera using selected API
@@ -68,6 +68,12 @@ int main(int argc, char **argv)
     if (!cap.isOpened()) {
         std::cerr << "ERROR! Unable to open camera\n";
         return -1;
+    }
+    else {
+        cv::Mat frame;
+        cap >> frame;
+        ROS_INFO_STREAM("frame cols = " << frame.cols);
+        ROS_INFO_STREAM("frame rows = " << frame.rows);
     }
     //
     // instantiate a Mat object to hold the image frame data
