@@ -17,14 +17,18 @@ int main(int argc, char **argv)
         n.serviceClient<sony_camera_node::CameraCommand>("optical_flow_node/camera_command");
     ros::ServiceClient calibrate_camera_command_client = 
         n.serviceClient<sony_camera_node::CameraCommand>("calibrate_camera_node/camera_command");
+    ros::ServiceClient visual_odometry_command_client = 
+        n.serviceClient<sony_camera_node::CameraCommand>("visual_odometry_node/camera_command");
+    
     sony_camera_node::CameraCommand camera_command_server;
     camera_command_server.request.command = atoll(argv[1]);
+    
     if (camera_command_server.request.command < 20) {
         if (camera_command_client.call(camera_command_server)) {
-            ROS_INFO_STREAM("Test called service sony_camera_node/camera_command");
+            ROS_INFO_STREAM("Called service sony_camera_node/camera_command");
             camera_command_server.request.command = (long long)idle;
             if (camera_command_client.call(camera_command_server)) {
-                ROS_INFO_STREAM("Test called service sony_camera_node/camera_command");
+                ROS_INFO_STREAM("Called service sony_camera_node/camera_command");
             }
             else {
                 ROS_ERROR_STREAM("Failed to call service sony_camera_node/camera_command");
@@ -67,6 +71,23 @@ int main(int argc, char **argv)
         }
         else {
             ROS_ERROR_STREAM("Failed to call service calibrate_camera_node/camera_command");
+            return EXIT_FAILURE;
+        }
+    }
+        else if(40 <= camera_command_server.request.command && camera_command_server.request.command < 50){
+        if (visual_odometry_command_client.call(camera_command_server)) {
+            ROS_INFO_STREAM("Called service visual_odometry_node/camera_command");
+            camera_command_server.request.command = (long long)idle;
+            if (visual_odometry_command_client.call(camera_command_server)) {
+                ROS_INFO_STREAM("Called service visual_odometry_node/camera_command");
+            }
+            else {
+                ROS_ERROR_STREAM("Failed to call service visual_odometry_node/camera_command");
+                return EXIT_FAILURE;
+            }
+        }
+        else {
+            ROS_ERROR_STREAM("Failed to call service visual_odometry_node/camera_command");
             return EXIT_FAILURE;
         }
     }

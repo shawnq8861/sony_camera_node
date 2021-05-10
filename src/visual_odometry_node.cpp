@@ -10,7 +10,8 @@
 #include <stdlib.h>
 #include <vector>
 
-static constexpr int max_points = 100;
+static constexpr int max_points = 200;
+static constexpr double distance_threshold = 8.0;
 
 int main(int argc, char **argv)
 {
@@ -352,10 +353,6 @@ int main(int argc, char **argv)
             tracked_trim_ss >> tracked_trim_path;
             cv::imwrite(tracked_trim_path, image3);
             //
-            // calculate the essential matrix
-            //
-
-            //
             // calculate the essential matrix for the 2 images and
             // corresponding camera poses.
             // the mask values are 0 if the point pair is an outlier,
@@ -367,7 +364,7 @@ int main(int argc, char **argv)
             // reading intrinsic parameters
             //
             std::cout << "reading camera intrinsics..." << std::endl;
-            cv::FileStorage fs("intrinsics.yaml", cv::FileStorage::READ);
+            cv::FileStorage fs("camera_intrinsics.yaml", cv::FileStorage::READ);
             if(!fs.isOpened()) {
                 ROS_INFO_STREAM("camera not calibrated");
             }
@@ -377,8 +374,8 @@ int main(int argc, char **argv)
                 fs.release();
                 cv::Mat inlier_mask;
                 std::cout << "calculating essential matrix..." << std::endl;
-                cv::Mat essential_mat = cv::findEssentialMat(points1,
-                                                             points2,
+                cv::Mat essential_mat = cv::findEssentialMat(points1_final,
+                                                             points2_final,
                                                              camera_matrix,
                                                              cv::RANSAC,
                                                              .99,
@@ -391,28 +388,56 @@ int main(int argc, char **argv)
                 // this function allows us to retrieve the triangulated object points.
                 //
                 cv::Mat rotation_mat;
-                cv::Mat translation_mat;
-                double distance_threshold = 10.0;
+                cv::Mat translation_mat;                
                 //
                 // define a matrix to hold triangulated 3D object points
                 //
-                cv::Mat object_points;
+                cv::Mat object_points_4d;
                 //
                 // several versions of this function exist. we will use the 
                 // version that triangulates the object points
                 //
+                cv::Mat pose_inlier_mask;
                 int num_good_inliers = cv::recoverPose(essential_mat,
-                                                       points1,
-                                                       points2,
+                                                       points1_final,
+                                                       points2_final,
                                                        camera_matrix,
                                                        rotation_mat,
                                                        translation_mat,
                                                        distance_threshold,
-                                                       cv::noArray(),
-                                                       object_points);
+                                                       pose_inlier_mask,
+                                                       object_points_4d);
                 if (num_good_inliers < 1) {
                     std::cout << "pose recovery failed..." << std::endl;
                 }
+                else {
+                    std::cout << "number good inliers = " << num_good_inliers << std::endl;
+                }
+                //
+                // convert 4d points to 3d points by normalizing the homogenous coordinate to 1
+                // and dividing each of the first three coordinates by the fourth coordinate
+                //
+                std::vector<cv::Point3f> object_points_3d;
+                int num_cols = object_points_4d.cols;
+                std::vector<cv::Point2f> img_points1;
+                std::vector<cv::Point3f> obj_points;
+                std::vector<cv::Point2f> img_points2;
+                for (int col = 0; col < object_points_4d.cols; ++col) {
+                    double x = object_points_4d.at<double>(0,col);
+                    double y = object_points_4d.at<double>(1,col);
+                    double z = object_points_4d.at<double>(2,col);
+                    double w = object_points_4d.at<double>(3,col);
+                    cv::Point3f point;
+                    point.x = x/w;
+                    point.y = y/w;
+                    point.z = z/w;
+                    object_points_3d.push_back(point);
+                    if (pose_inlier_mask.at<int>(col) > 0 && pose_inlier_mask.at<int>(col) < 2500) {
+                        img_points1.push_back(points1_final[col]);
+                        obj_points.push_back(object_points_3d[col]);
+                        img_points2.push_back(points2_final[col]);
+                    }
+                }                
                 //
                 // refine the camera pose for each image
                 //
@@ -422,47 +447,50 @@ int main(int argc, char **argv)
                 //
                 // pass in the object points from pose recovery.
                 //
-                cv::Mat rot_mat1(rotation_mat);
-                cv::Mat trans_mat1(translation_mat);
-                epsilon = FLT_EPSILON;
-                term_crit = cv::TermCriteria(
-                            cv::TermCriteria::EPS + cv::TermCriteria::COUNT, 
-                            max_count, 
-                            epsilon);
-                cv::solvePnPRefineLM(object_points,
-                                     points1,
-                                     camera_matrix,
-                                     dist_coeffs,
-                                     rot_mat1,
-                                     trans_mat1,
-                                     term_crit
-                                     );
-                //
-                // repeat for the second image
-                //
-                cv::Mat rot_mat2(rot_mat1);
-                cv::Mat trans_mat2(trans_mat1);
-                cv::solvePnPRefineLM(object_points,
-                                     points1,
-                                     camera_matrix,
-                                     dist_coeffs,
-                                     rot_mat1,
-                                     trans_mat1,
-                                     term_crit
-                                     );
+                std::cout << "calling solvePNP for first image points..." << std::endl;
+                cv::Mat rot_vec1;
+                cv::Mat trans_vec1;
+                cv::solvePnP(obj_points, 
+                             img_points1, 
+                             camera_matrix, 
+                             dist_coeffs, 
+                             rot_vec1, 
+                             trans_vec1,
+                             false,
+                             cv::SOLVEPNP_ITERATIVE
+                             );
+                std::cout << "Rotation Matrix 1 = " << rot_vec1 << std::endl;
+                std::cout << "Translation Matrix 1 = " << trans_vec1 << std::endl;
+                std::cout << "calling solvePNP for second image points..." << std::endl;
+                cv::Mat rot_vec2;
+                cv::Mat trans_vec2;
+                cv::solvePnP(obj_points,
+                             img_points2,
+                             camera_matrix,
+                             dist_coeffs,
+                             rot_vec2,
+                             trans_vec2,
+                             false,
+                             cv::SOLVEPNP_ITERATIVE
+                             );
+
+                std::cout << "Rotation Matrix 2 = " << rot_vec2 << std::endl;
+                std::cout << "Translation Matrix 2 = " << trans_vec2 << std::endl;
                 //
                 // extract camera motion from translation matrices
                 // 
                 // subtract trans_mat1 from trans_mat2, result is incremental
                 // camera motion
                 //
-                cv::Mat delta_trans = trans_mat2 - trans_mat1;
+                cv::Mat delta_trans = trans_vec2 - trans_vec1;
                 //
                 // parse specific elements of transalation if needed
                 // to determine motion along x or y axes
                 //
                 double x_trans = delta_trans.at<double>(0);
                 double y_trans = delta_trans.at<double>(1);
+                std::cout << "x translation = " << x_trans << std:: endl
+                          << "y translation = " << y_trans << std:: endl;
             }
             // end 
         }

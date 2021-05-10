@@ -46,7 +46,7 @@ int main(int argc, char **argv)
     // set the loop rate used by spin to control while loop execution
     // this is an integer that equates to loops/second
     //
-    ros::Rate loop_rate = 2.0;
+    ros::Rate loop_rate = 10;
     //
     // publish the messages in a while loop as long as our node is
     // in good standing as a ROS node
@@ -59,8 +59,8 @@ int main(int argc, char **argv)
     // set up video capture
     //
     cv::VideoCapture cap;
-    int deviceID = 0;             // 0 = open default camera
-    int apiID = cv::CAP_ANY;      // 0 = autodetect default API
+    int deviceID = 2;             // 0 = open default camera
+    int apiID = cv::CAP_GSTREAMER;      // 0 = autodetect default API
     //
     // open selected camera using selected API
     //
@@ -70,6 +70,22 @@ int main(int argc, char **argv)
         return -1;
     }
     else {
+        double api = cap.get(cv::CAP_PROP_BACKEND);
+        ROS_INFO_STREAM("backend = " << api);
+        double frame_width = cap.get(cv::CAP_PROP_FRAME_WIDTH);
+        ROS_INFO_STREAM("frame width = " << frame_width);
+        double frame_height = cap.get(cv::CAP_PROP_FRAME_HEIGHT);
+        ROS_INFO_STREAM("frame height = " << frame_height);
+        double frame_rate = cap.get(cv::CAP_PROP_FPS);
+        ROS_INFO_STREAM("frame rate = " << frame_rate);
+        double fps = frame_rate * 5.0;
+        cap.set(cv::CAP_PROP_FPS, fps);
+        frame_rate = cap.get(cv::CAP_PROP_FPS);
+        ROS_INFO_STREAM("frame rate = " << frame_rate);
+        frame_width = cap.get(cv::CAP_PROP_FRAME_WIDTH);
+        ROS_INFO_STREAM("frame width = " << frame_width);
+        frame_height = cap.get(cv::CAP_PROP_FRAME_HEIGHT);
+        ROS_INFO_STREAM("frame height = " << frame_height);
         cv::Mat frame;
         cap >> frame;
         ROS_INFO_STREAM("frame cols = " << frame.cols);
