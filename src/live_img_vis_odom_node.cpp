@@ -8,7 +8,10 @@
 #include <iostream>
 #include <sstream>
 
-static constexpr int max_points = 100;
+//static constexpr int max_points = 100;
+static constexpr int max_points = 200;
+static constexpr double threshold = 500.0;
+static constexpr double distance_threshold = 1.0;
 
 int main(int argc, char **argv)
 {
@@ -71,6 +74,15 @@ int main(int argc, char **argv)
     //
     int image_count = 1;
     bool show = false;
+    //
+    // shared file names
+    //
+    std::string base_path = "/catkin_ws/";
+    std::string image1_name = "visual_odometry_image_1.jpg";
+    std::string image2_name = "visual_odometry_image_2.jpg";
+    std::string gray1_name = "gray_image_1.jpg";
+    std::string gray2_name = "gray_image_2.jpg";
+    std::string homedir = getenv("HOME");
     while (ros::ok() && loop_count > -1) {
         ++loop_count;
         final_count = loop_count;
@@ -204,6 +216,8 @@ int main(int argc, char **argv)
             //
 
             double percent_overlap = 0.0;
+            std::vector<cv::Point2f> points1_final;
+            std::vector<cv::Point2f> points2_final;
             while (percent_overlap < 5.0) {
                 cap >> frame;
                 cv::Mat image2 = frame;
@@ -244,13 +258,13 @@ int main(int argc, char **argv)
                     if (flow_found_status[i] == 1) {
                         points1_trim.push_back(points1[i]);
                         points2_trim.push_back(points2[i]);
-                        cv::line(image1,
-                                points1[i],
-                                points2[i],
-                                line_color,
-                                line_thickness,
-                                line_type
-                                );
+                        //cv::line(image1,
+                                //points1[i],
+                                //points2[i],
+                                //line_color,
+                                //line_thickness,
+                                //line_type
+                                //);
                     }
                     else {
                         continue;
@@ -281,10 +295,11 @@ int main(int argc, char **argv)
                 // initialize row to 0, auto type
                 //
                 auto row = max_rows - max_rows;
-                const double threshold = 250.0;
+                line_color = cv::Scalar(0, 255, 0);
+                //cv::Mat image3 = cv::imread(path2);
                 double delta_x_sum = 0.0;
-                std::vector<cv::Point2f> points1_final;
-                std::vector<cv::Point2f> points2_final;
+
+
                 int count = 0;
                 for (row = 0; row < max_rows; ++row) {
                     cv::Mat row_mat1 = descriptors1.row(row);
@@ -304,10 +319,17 @@ int main(int argc, char **argv)
                         double delta_y = abs(y2 - y1);
                         ++count;
                         delta_x_sum += (abs(x2 - x1));
-                        if (delta_y < threshold) {
-                            points1_final.push_back(points1_trim[row]);
-                            points2_final.push_back(points2_trim[row]);
-                        }
+                        //if (delta_y < threshold) {
+                        //cv::line(image3,
+                            //points1_trim[row],
+                            //points2_trim[row],
+                            //line_color,
+                            //line_thickness,
+                            //line_type
+                            //);
+                        points1_final.push_back(points1_trim[row]);
+                        points2_final.push_back(points2_trim[row]);
+                        //}
                     }
                     else {
                         continue;
@@ -316,6 +338,14 @@ int main(int argc, char **argv)
                 double delta_x_ave = delta_x_sum/(double)count;
                 double img_width = (double)image2.cols;
                 percent_overlap = 100.0 * (img_width - delta_x_ave)/img_width;
+                //std::string orb_tracked_trim_name = "orb_tracked_image_trim.jpg";
+                //std::stringstream tracked_trim_ss;
+                //tracked_trim_ss << homedir;
+                //tracked_trim_ss << base_path;
+                //tracked_trim_ss << orb_tracked_trim_name;
+                //std::string tracked_trim_path;
+                //tracked_trim_ss >> tracked_trim_path;
+                //cv::imwrite(tracked_trim_path, image3);
             }
             //
             // calculate the essential matrix for the 2 images and
@@ -339,13 +369,14 @@ int main(int argc, char **argv)
                 fs.release();
                 cv::Mat inlier_mask;
                 std::cout << "calculating essential matrix..." << std::endl;
-                cv::Mat essential_mat = cv::findEssentialMat(points1,
-                                                             points2,
+                cv::Mat essential_mat = cv::findEssentialMat(points1_final,
+                                                             points2_final,
                                                              camera_matrix,
                                                              cv::RANSAC,
                                                              .99,
                                                              1.0,
-                                                             inlier_mask);    
+                                                             inlier_mask);
+                std::cout << "Essential Matrix = " << essential_mat << std::endl; 
                 //
                 // determine the realtive rotation matrix, R, and relative 
                 // translation matrix, T between the 2 camera positions.
@@ -354,27 +385,70 @@ int main(int argc, char **argv)
                 //
                 cv::Mat rotation_mat;
                 cv::Mat translation_mat;
-                double distance_threshold = 10.0;
+                //double distance_threshold = 10.0;
                 //
                 // define a matrix to hold triangulated 3D object points
                 //
-                cv::Mat object_points;
+                cv::Mat object_points_4d;
                 //
                 // several versions of this function exist. we will use the 
                 // version that triangulates the object points
                 //
+                cv::Mat pose_inlier_mask;
                 int num_good_inliers = cv::recoverPose(essential_mat,
-                                                       points1,
-                                                       points2,
+                                                       points1_final,
+                                                       points2_final,
                                                        camera_matrix,
                                                        rotation_mat,
                                                        translation_mat,
                                                        distance_threshold,
-                                                       cv::noArray(),
-                                                       object_points);
+                                                       pose_inlier_mask,
+                                                       object_points_4d);
                 if (num_good_inliers < 1) {
                     std::cout << "pose recovery failed..." << std::endl;
                 }
+                else {
+                    std::cout << "number good inliers = " << num_good_inliers << std::endl;
+                    std::cout << "Pose Inlier Mask = " << pose_inlier_mask << std::endl;
+                    std::cout << "Recovered Pose Rotation Matrix = " << rotation_mat << std::endl;
+                    std::cout << "Recovered Pose Translation Matrix = " << translation_mat << std::endl;
+                }
+                //
+                // convert 4d points to 3d points by normalizing the homogenous coordinate to 1
+                // and dividing each of the first three coordinates by the fourth coordinate
+                //
+                std::vector<cv::Point3f> object_points_3d;
+                int num_cols = object_points_4d.cols;
+                std::vector<cv::Point2f> img_points1;
+                std::vector<cv::Point3f> obj_points;
+                std::vector<cv::Point2f> img_points2;
+                std::cout << "points1 final size = " << points1_final.size() << std::endl;
+                std::cout << "points2 final size = " << points2_final.size() << std::endl;
+                std::cout << "object points cols = " << object_points_4d.cols << std::endl;
+                std::cout << "pose inlier mask rows = " << pose_inlier_mask.rows << std::endl;
+                std::cout << "pose inlier mask cols = " << pose_inlier_mask.cols << std::endl;
+                //for (int col = 0; col < object_points_4d.cols; ++col) {
+                for (int row = 0; row < pose_inlier_mask.rows; ++row) {
+                    std::cout << "row = " << row << std::endl;
+                    std::cout << "mask value = " << (int)pose_inlier_mask.at<uint8_t>(row, 0) << std::endl;
+                    double x = object_points_4d.at<double>(0,row);
+                    double y = object_points_4d.at<double>(1,row);
+                    double z = object_points_4d.at<double>(2,row);
+                    double w = object_points_4d.at<double>(3,row);
+                    cv::Point3f point;
+                    point.x = x/w;
+                    point.y = y/w;
+                    point.z = z/w;
+                    object_points_3d.push_back(point);
+                    if (pose_inlier_mask.at<uint8_t>(row,0) == 255) {
+                        img_points1.push_back(points1_final[row]);
+                        obj_points.push_back(object_points_3d[row]);
+                        img_points2.push_back(points2_final[row]);
+                    }
+                }
+                std::cout << "img points1 size = " << img_points1.size() << std::endl;
+                std::cout << "img points2 size = " << img_points2.size() << std::endl;
+                std::cout << "obj points size = " << obj_points.size() << std::endl;
                 //
                 // refine the camera pose for each image
                 //
@@ -384,47 +458,50 @@ int main(int argc, char **argv)
                 //
                 // pass in the object points from pose recovery.
                 //
-                cv::Mat rot_mat1(rotation_mat);
-                cv::Mat trans_mat1(translation_mat);
-                epsilon = FLT_EPSILON;
-                term_crit = cv::TermCriteria(
-                            cv::TermCriteria::EPS + cv::TermCriteria::COUNT, 
-                            max_count, 
-                            epsilon);
-                cv::solvePnPRefineLM(object_points,
-                                     points1,
-                                     camera_matrix,
-                                     dist_coeffs,
-                                     rot_mat1,
-                                     trans_mat1,
-                                     term_crit
-                                     );
-                //
-                // repeat for the second image
-                //
-                cv::Mat rot_mat2(rot_mat1);
-                cv::Mat trans_mat2(trans_mat1);
-                cv::solvePnPRefineLM(object_points,
-                                     points1,
-                                     camera_matrix,
-                                     dist_coeffs,
-                                     rot_mat1,
-                                     trans_mat1,
-                                     term_crit
-                                     );
+                std::cout << "calling solvePNP for first image points..." << std::endl;
+                cv::Mat rot_vec1;
+                cv::Mat trans_vec1;
+                cv::solvePnP(obj_points, 
+                             img_points1, 
+                             camera_matrix, 
+                             dist_coeffs, 
+                             rot_vec1, 
+                             trans_vec1,
+                             false,
+                             cv::SOLVEPNP_ITERATIVE
+                             );
+                std::cout << "Pose 1 Rotation Matrix 1 = " << rot_vec1 << std::endl;
+                std::cout << "Pose 1 Translation Matrix 1 = " << trans_vec1 << std::endl;
+                std::cout << "calling solvePNP for second image points..." << std::endl;
+                cv::Mat rot_vec2;
+                cv::Mat trans_vec2;
+                cv::solvePnP(obj_points,
+                             img_points2,
+                             camera_matrix,
+                             dist_coeffs,
+                             rot_vec2,
+                             trans_vec2,
+                             false,
+                             cv::SOLVEPNP_ITERATIVE
+                             );
+
+                std::cout << "Pose 2 Rotation Matrix 2 = " << rot_vec2 << std::endl;
+                std::cout << "Pose 2 Translation Matrix 2 = " << trans_vec2 << std::endl;
                 //
                 // extract camera motion from translation matrices
                 // 
                 // subtract trans_mat1 from trans_mat2, result is incremental
                 // camera motion
                 //
-                cv::Mat delta_trans = trans_mat2 - trans_mat1;
+                cv::Mat delta_trans = trans_vec2 - trans_vec1;
                 //
                 // parse specific elements of transalation if needed
                 // to determine motion along x or y axes
                 //
                 double x_trans = delta_trans.at<double>(0);
                 double y_trans = delta_trans.at<double>(1);
+                std::cout << "x translation = " << x_trans << std:: endl
+                          << "y translation = " << y_trans << std:: endl;
             }
             // end 
         }

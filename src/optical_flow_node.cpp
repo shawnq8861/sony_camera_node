@@ -9,7 +9,8 @@
 #include <stdlib.h>
 #include <vector>
 
-static constexpr int max_points = 100;
+static constexpr int max_points = 200;
+static constexpr double threshold = 250.0;
 
 int main(int argc, char **argv)
 {
@@ -296,11 +297,11 @@ int main(int argc, char **argv)
             // create ORB detector to find corners in first image
             //
             int 	n_features = max_points;
-            float 	scale_factor = 1.2f;
+            float 	scale_factor = 1.7f;
             int 	n_levels = 8;
             int 	edge_threshold = 31;
             int 	first_level = 0;
-            int 	WTA_K = 2;
+            int 	WTA_K = 4;
             cv::ORB::ScoreType 	score_type = cv::ORB::HARRIS_SCORE;
             int 	patch_size = 31;
             int 	fast_threshold = 20; 
@@ -432,7 +433,6 @@ int main(int argc, char **argv)
             //
             auto max_rows = std::min(descriptors1.rows, descriptors2.rows);
             auto row = max_rows - max_rows;
-            const double threshold = 250.0;
             line_color = cv::Scalar(0, 255, 0);
             cv::Mat image3 = cv::imread(path2);
             double delta_x_sum = 0.0;
@@ -457,12 +457,12 @@ int main(int argc, char **argv)
                         delta_x_sum += (abs(x2 - x1));
                         if (delta_y < threshold) {
                             cv::line(image3,
-                            points1_trim[row],
-                            points2_trim[row],
-                            line_color,
-                            line_thickness,
-                            line_type
-                            );
+                                points1_trim[row],
+                                points2_trim[row],
+                                line_color,
+                                line_thickness,
+                                line_type
+                                );
                         }
                     }
                     else {

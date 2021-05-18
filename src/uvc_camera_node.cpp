@@ -59,7 +59,7 @@ int main(int argc, char **argv)
     // set up video capture
     //
     cv::VideoCapture cap;
-    int deviceID = 2;             // 0 = open default camera
+    int deviceID = 0;             // 0 = open default camera
     int apiID = cv::CAP_GSTREAMER;      // 0 = autodetect default API
     //
     // open selected camera using selected API
