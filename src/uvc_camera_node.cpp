@@ -59,7 +59,7 @@ int main(int argc, char **argv)
     // set up video capture
     //
     cv::VideoCapture cap;
-    int deviceID = 0;             // 0 = open default camera
+    int deviceID = 2;             // 0 = open default camera
     int apiID = cv::CAP_GSTREAMER;      // 0 = autodetect default API
     //
     // open selected camera using selected API
@@ -139,7 +139,7 @@ int main(int argc, char **argv)
                 cv::destroyAllWindows();
             }
         }
-        ROS_INFO_STREAM("test command value = " << (int)camera_control.get_control_value());
+        ROS_INFO_STREAM("camera node command value = " << (int)camera_control.get_control_value());
         if (0 == camera_control.get_control_value()) {
             //
             // prepare for shutdown

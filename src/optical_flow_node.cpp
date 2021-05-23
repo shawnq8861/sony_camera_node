@@ -9,7 +9,7 @@
 #include <stdlib.h>
 #include <vector>
 
-static constexpr int max_points = 200;
+static constexpr int max_points = 100;
 static constexpr double threshold = 250.0;
 
 int main(int argc, char **argv)
@@ -297,11 +297,11 @@ int main(int argc, char **argv)
             // create ORB detector to find corners in first image
             //
             int 	n_features = max_points;
-            float 	scale_factor = 1.7f;
+            float 	scale_factor = 1.2f;
             int 	n_levels = 8;
             int 	edge_threshold = 31;
             int 	first_level = 0;
-            int 	WTA_K = 4;
+            int 	WTA_K = 2;
             cv::ORB::ScoreType 	score_type = cv::ORB::HARRIS_SCORE;
             int 	patch_size = 31;
             int 	fast_threshold = 20; 
