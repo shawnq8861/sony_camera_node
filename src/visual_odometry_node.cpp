@@ -73,8 +73,10 @@ int main(int argc, char **argv)
     std::string base_path = "/catkin_ws/";
     std::string image1_name = "visual_odometry_image_1.jpg";
     std::string image2_name = "visual_odometry_image_2.jpg";
+    std::string image3_name = "visual_odometry_image_3.jpg";
     std::string gray1_name = "gray_image_1.jpg";
     std::string gray2_name = "gray_image_2.jpg";
+    std::string gray3_name = "gray_image_3.jpg";
     std::string homedir = getenv("HOME");
     while (ros::ok() && loop_count > -1) {
         ++loop_count;
@@ -125,11 +127,14 @@ int main(int argc, char **argv)
             if (image_count == 2) {
                 path_ss << image2_name;
             }
+            if (image_count == 3) {
+                path_ss << image3_name;
+            }
             std::string path;
             path_ss >> path;
             cv::imwrite(path, data);
             ++image_count;
-            if (image_count == 3) {
+            if (image_count == 4) {
                 //
                 // reset count and overwrite old data
                 //
@@ -150,8 +155,18 @@ int main(int argc, char **argv)
             // 5) read image 2 from file
             // 6) convert to grayscale
             // 7) calculate pyramid LK optical flow
-            // 8) calculate lines between matching points and overlay line 
-            //    on first image
+            // 8) initialize camera pose in world coordinates
+            // 9) find essential matrix image 1 and 2
+            // 10) recover pose image 1 and 2
+            // 11) transform camera pose and concatenate
+            // 12) find ORB features to track on image 2
+            // 13) refine to subpixel corners
+            // 14) read image 3 from file
+            // 15) convert image 3 to grayscale
+            // 16) calculate pyramid LK optical flow
+            // 17) find essential matrix image 1 and 2
+            // 18) recover pose image 1 and 2
+            // 19) transform camera pose and concatenate
             //           
             std::stringstream path1_ss;
             path1_ss << homedir;
@@ -187,7 +202,7 @@ int main(int argc, char **argv)
                                                     patch_size,
                                                     fast_threshold);
             //
-            // detect ORB keypoints
+            // detect ORB keypoints in image 1
             //
             std::vector<cv::KeyPoint> keypoints1;
             orb_detector->detect(gray1, keypoints1);
@@ -228,7 +243,7 @@ int main(int argc, char **argv)
             cv::Mat gray2;
             cv::cvtColor(image2, gray2, cv::COLOR_BGR2GRAY);
             //
-            // call pyramid Lucas Kanade
+            // call pyramid Lucas Kanade for images 1 and 2
             //
             int max_pyramid_level = 5;
             epsilon = .3;
@@ -252,6 +267,7 @@ int main(int argc, char **argv)
             cv::Scalar line_color(0, 0, 255);
             int line_thickness = 5;
             int line_type = cv::LINE_AA;
+            cv::Mat image_tracked_1 = cv::imread(path1);
             std::vector<cv::Point2f> points1_trim;
             std::vector<cv::Point2f> points2_trim;
             //
@@ -263,7 +279,7 @@ int main(int argc, char **argv)
                 if (flow_found_status[i] == 1) {
                     points1_trim.push_back(points1[i]);
                     points2_trim.push_back(points2[i]);
-                    cv::line(image1,
+                    cv::line(image_tracked_1,
                             points1[i],
                             points2[i],
                             line_color,
@@ -275,14 +291,14 @@ int main(int argc, char **argv)
                     continue;
                 }
             }
-            std::string orb_tracked_name = "orb_tracked_image.jpg";
-            std::stringstream tracked_ss;
-            tracked_ss << homedir;
-            tracked_ss << base_path;
-            tracked_ss << orb_tracked_name;
-            std::string tracked_path;
-            tracked_ss >> tracked_path;
-            cv::imwrite(tracked_path, image1);
+            std::string orb_tracked_name_1 = "orb_tracked_image_1.jpg";
+            std::stringstream tracked_ss_1;
+            tracked_ss_1 << homedir;
+            tracked_ss_1 << base_path;
+            tracked_ss_1 << orb_tracked_name_1;
+            std::string tracked_path_1;
+            tracked_ss_1 >> tracked_path_1;
+            cv::imwrite(tracked_path_1, image_tracked_1);
             //
             // calculate descriptors for second set of points
             //
@@ -309,58 +325,56 @@ int main(int argc, char **argv)
             //
             auto row = max_rows - max_rows;
             line_color = cv::Scalar(0, 255, 0);
-            cv::Mat image3 = cv::imread(path2);
+            cv::Mat image_tracked_2 = cv::imread(path2);
             double delta_x_sum = 0.0;
             std::vector<cv::Point2f> points1_final;
             std::vector<cv::Point2f> points2_final;
             int count = 0;
             for (row = 0; row < max_rows; ++row) {
-                    cv::Mat row_mat1 = descriptors1.row(row);
-                    cv::Mat row_mat2 = descriptors2.row(row);
-                    double dist = cv::norm(row_mat1 - row_mat2);
-                    if (dist < threshold) {
-                        //
-                        // descriptors match, use the points
-                        // draw lines and write image to file
-                        //
-                        // compute slope
-                        //
-                        double x1 = points1_trim[row].x;
-                        double y1 = points1_trim[row].y;
-                        double x2 = points2_trim[row].x;
-                        double y2 = points2_trim[row].y;
-                        double delta_y = abs(y2 - y1);
-                        ++count;
-                        delta_x_sum += (abs(x2 - x1));
-                        //if (delta_y < threshold) {
-                        cv::line(image3,
+                cv::Mat row_mat1 = descriptors1.row(row);
+                cv::Mat row_mat2 = descriptors2.row(row);
+                double dist = cv::norm(row_mat1 - row_mat2);
+                if (dist < threshold) {
+                    //
+                    // descriptors match, use the points
+                    // draw lines and write image to file
+                    //
+                    // compute slope
+                    //
+                    double x1 = points1_trim[row].x;
+                    double y1 = points1_trim[row].y;
+                    double x2 = points2_trim[row].x;
+                    double y2 = points2_trim[row].y;
+                    double delta_y = abs(y2 - y1);
+                    ++count;
+                    delta_x_sum += (abs(x2 - x1));
+                    cv::line(image_tracked_2,
                             points1_trim[row],
                             points2_trim[row],
                             line_color,
                             line_thickness,
                             line_type
                             );
-                        points1_final.push_back(points1_trim[row]);
-                        points2_final.push_back(points2_trim[row]);
-                        //}
-                    }
-                    else {
-                        continue;
-                    }
+                    points1_final.push_back(points1_trim[row]);
+                    points2_final.push_back(points2_trim[row]);
+                }
+                else {
+                    continue;
+                }
             }
             double delta_x_ave = delta_x_sum/(double)count;
-            double img_width = (double)image3.cols;
+            double img_width = (double)image_tracked_2.cols;
             double percent_overlap = 100.0 * (img_width - delta_x_ave)/img_width;
-            std::string orb_tracked_trim_name = "orb_tracked_image_trim.jpg";
-            std::stringstream tracked_trim_ss;
-            tracked_trim_ss << homedir;
-            tracked_trim_ss << base_path;
-            tracked_trim_ss << orb_tracked_trim_name;
-            std::string tracked_trim_path;
-            tracked_trim_ss >> tracked_trim_path;
-            cv::imwrite(tracked_trim_path, image3);
+            std::string orb_tracked_trim_name_1 = "orb_tracked_image_trim_1.jpg";
+            std::stringstream tracked_trim_ss_1;
+            tracked_trim_ss_1 << homedir;
+            tracked_trim_ss_1 << base_path;
+            tracked_trim_ss_1 << orb_tracked_trim_name_1;
+            std::string tracked_trim_path_1;
+            tracked_trim_ss_1 >> tracked_trim_path_1;
+            cv::imwrite(tracked_trim_path_1, image_tracked_2);
             //
-            // calculate the essential matrix for the 2 images and
+            // calculate the essential matrix for the first 2 images and
             // corresponding camera poses.
             // the mask values are 0 if the point pair is an outlier,
             // and 1 if the point pair is an inlier
@@ -379,140 +393,298 @@ int main(int argc, char **argv)
                 fs["camera_matrix"] >> camera_matrix;
                 fs["dist_coeffs"] >> dist_coeffs;
                 fs.release();
-                cv::Mat inlier_mask;
-                std::cout << "calculating essential matrix..." << std::endl;
-                cv::Mat essential_mat = cv::findEssentialMat(points1_final,
+                //
+                // calculate essential matrix
+                //
+                cv::Mat inlier_mask_1;
+                std::cout << "calculating essential matrix 1..." << std::endl;
+                cv::Mat essential_mat_1 = cv::findEssentialMat(points1_final,
                                                              points2_final,
                                                              camera_matrix,
                                                              cv::RANSAC,
                                                              .99,
                                                              1.0,
-                                                             inlier_mask);
-                std::cout << "Essential Matrix = " << essential_mat << std::endl;
+                                                             inlier_mask_1);
+                std::cout << "Essential Matrix 1 = " << essential_mat_1 << std::endl;
                 //
-                // determine the realtive rotation matrix, R, and relative 
-                // translation matrix, T between the 2 camera positions.
+                // determine the relative rotation matrix, R, and relative 
+                // translation matrix, T between the first 2 camera positions.
                 //
-                // this function allows us to retrieve the triangulated object points.
+                cv::Mat rotation_mat_1;
+                cv::Mat translation_mat_1;                
                 //
-                cv::Mat rotation_mat;
-                cv::Mat translation_mat;                
+                // recover the relative pose
                 //
-                // define a matrix to hold triangulated 3D object points
-                //
-                cv::Mat object_points_4d;
-                //
-                // several versions of this function exist. we will use the 
-                // version that triangulates the object points
-                //
-                cv::Mat pose_inlier_mask;
-                int num_good_inliers = cv::recoverPose(essential_mat,
+                cv::Mat pose_inlier_mask_1;
+                std::cout << "pose recovery 1..." << std::endl;
+                int num_good_inliers = cv::recoverPose(essential_mat_1,
                                                        points1_final,
                                                        points2_final,
                                                        camera_matrix,
-                                                       rotation_mat,
-                                                       translation_mat,
+                                                       rotation_mat_1,
+                                                       translation_mat_1,
                                                        distance_threshold,
-                                                       pose_inlier_mask,
-                                                       object_points_4d);
+                                                       pose_inlier_mask_1);
                 if (num_good_inliers < 1) {
                     std::cout << "pose recovery failed..." << std::endl;
                 }
                 else {
                     std::cout << "number good inliers = " << num_good_inliers << std::endl;
-                    std::cout << "Pose Inlier Mask = " << pose_inlier_mask << std::endl;
-                    std::cout << "Recovered Pose Rotation Matrix = " << rotation_mat << std::endl;
-                    std::cout << "Recovered Pose Translation Matrix = " << translation_mat << std::endl;
+                    std::cout << "Recovered Pose Rotation Matrix = " << rotation_mat_1 << std::endl;
+                    std::cout << "Recovered Pose Translation Matrix = " << translation_mat_1 << std::endl;
                 }
                 //
-                // convert 4d points to 3d points by normalizing the homogenous coordinate to 1
-                // and dividing each of the first three coordinates by the fourth coordinate
+                // initialize the camera pose to first relative pose, and scale trajectory
                 //
-                std::vector<cv::Point3f> object_points_3d;
-                int num_cols = object_points_4d.cols;
-                std::vector<cv::Point2f> img_points1;
-                std::vector<cv::Point3f> obj_points;
-                std::vector<cv::Point2f> img_points2;
-                std::cout << "points1 final size = " << points1_final.size() << std::endl;
-                std::cout << "points2 final size = " << points2_final.size() << std::endl;
-                std::cout << "object points cols = " << object_points_4d.cols << std::endl;
-                std::cout << "pose inlier mask rows = " << pose_inlier_mask.rows << std::endl;
-                std::cout << "pose inlier mask cols = " << pose_inlier_mask.cols << std::endl;
-                //for (int col = 0; col < object_points_4d.cols; ++col) {
-                for (int row = 0; row < pose_inlier_mask.rows; ++row) {
-                    std::cout << "row = " << row << std::endl;
-                    std::cout << "mask value = " << (int)pose_inlier_mask.at<uint8_t>(row, 0) << std::endl;
-                    double x = object_points_4d.at<double>(0,row);
-                    double y = object_points_4d.at<double>(1,row);
-                    double z = object_points_4d.at<double>(2,row);
-                    double w = object_points_4d.at<double>(3,row);
-                    cv::Point3f point;
-                    point.x = x/w;
-                    point.y = y/w;
-                    point.z = z/w;
-                    object_points_3d.push_back(point);
-                    if (pose_inlier_mask.at<uint8_t>(row,0) == 255) {
-                        img_points1.push_back(points1_final[row]);
-                        obj_points.push_back(object_points_3d[row]);
-                        img_points2.push_back(points2_final[row]);
+                cv::Mat camera_pose_R = rotation_mat_1.clone();
+                cv::Mat camera_pose_t = translation_mat_1.clone();
+                std::vector<cv::Point3f> trajectory;
+                double scale = 1.0;
+                //
+                // transform the camera pose, translation first
+                //
+                camera_pose_t = camera_pose_t + scale * (camera_pose_R * translation_mat_1);
+                camera_pose_R = camera_pose_R * rotation_mat_1;
+                //
+                // update the trajectory
+                //
+                cv::Point3f curr_point(camera_pose_t.at<double>(0), camera_pose_t.at<double>(1), camera_pose_t.at<double>(2));
+                trajectory.push_back(curr_point);
+                //
+                // now, repeat the preceding using image 2 and image 3
+                //
+                //
+                // detect ORB keypoints in image 2
+                //
+                keypoints2.clear();
+                orb_detector->detect(gray2, keypoints2);
+                //
+                // convert keypoints to vec2f for call to calcOpticalFlowPyrLK
+                //
+                points2.clear();
+                cv::KeyPoint::convert(keypoints2, points2);
+                //
+                // refine pixel locations to subpixel accuracy
+                //
+                // set the half side length of the search window to 10
+                // for a 20 x 20 search window
+                //
+                double epsilon = .03;
+                term_crit = cv::TermCriteria(
+                            cv::TermCriteria::MAX_ITER | cv::TermCriteria::EPS,
+                            max_count,
+                            epsilon);
+                cv::cornerSubPix(gray2,
+                                points2,
+                                cv::Size(search_win_size, search_win_size),
+                                cv::Size(-1, -1),
+                                term_crit
+                                );
+
+
+
+                //
+                // read image 3, convert to grayscale
+                //
+                std::stringstream path3_ss;
+                path3_ss << homedir;
+                path3_ss << base_path;
+                path3_ss << image3_name;
+                std::string path3;
+                path3_ss >> path3;
+                cv::Mat image3 = cv::imread(path3);
+                cv::Mat gray3;
+                cv::cvtColor(image3, gray3, cv::COLOR_BGR2GRAY);
+                //
+                // call pyramid Lucas Kanade for images 2 and 3
+                //
+                epsilon = .3;
+                term_crit = cv::TermCriteria(
+                                cv::TermCriteria::MAX_ITER | cv::TermCriteria::EPS,
+                                max_count,
+                                epsilon);
+                std::vector<cv::Point2f> points3;
+                flow_found_status.clear();
+                cv::calcOpticalFlowPyrLK(gray2,
+                                        gray3,
+                                        points2,
+                                        points3,
+                                        flow_found_status,
+                                        cv::noArray(),
+                                        cv::Size(search_win_size * 2 + 1,
+                                                search_win_size * 2 + 1),
+                                        max_pyramid_level,
+                                        term_crit
+                                        );
+                line_color = cv::Scalar(0, 0, 255);
+                line_thickness = 5;
+                line_type = cv::LINE_AA;
+                cv::Mat image_tracked_3 = cv::imread(path2);
+                points2_trim.clear();
+                std::vector<cv::Point2f> points3_trim;
+                //
+                // only keep points when flow was found
+                //
+                for (int i = 0;
+                    i < static_cast<int>(points1.size());
+                    ++i) {
+                    if (flow_found_status[i] == 1) {
+                        points2_trim.push_back(points2[i]);
+                        points3_trim.push_back(points3[i]);
+                        cv::line(image_tracked_3,
+                                points2[i],
+                                points3[i],
+                                line_color,
+                                line_thickness,
+                                line_type
+                                );
+                    }
+                    else {
+                        continue;
                     }
                 }
-                std::cout << "img points1 size = " << img_points1.size() << std::endl;
-                std::cout << "img points2 size = " << img_points2.size() << std::endl;
-                std::cout << "obj points size = " << obj_points.size() << std::endl;
+                std::string orb_tracked_name_2 = "orb_tracked_image_2.jpg";
+                std::stringstream tracked_ss_2;
+                tracked_ss_2 << homedir;
+                tracked_ss_2 << base_path;
+                tracked_ss_2 << orb_tracked_name_2;
+                std::string tracked_path_2;
+                tracked_ss_2 >> tracked_path_2;
+                cv::imwrite(tracked_path_2, image_tracked_3);
                 //
-                // refine the camera pose for each image
+                // calculate descriptors for second set of points
                 //
-                // we can call one of the solvePNPRefine functions:
-                // solvePnPRefineLM uses the Levenberg-Marquard iterative algorithm.
-                // solvePnPRefineVVS() uses a virtual visual servoing scheme.
+                // first, convert points to keypoints
                 //
-                // pass in the object points from pose recovery.
+                keypoints2.clear();
+                cv::KeyPoint::convert(points2_trim, keypoints2);
+                std::vector<cv::KeyPoint> keypoints3;
+                cv::KeyPoint::convert(points3_trim, keypoints3);
                 //
-                std::cout << "calling solvePNP for first image points..." << std::endl;
-                cv::Mat rot_vec1;
-                cv::Mat trans_vec1;
-                cv::solvePnP(obj_points, 
-                             img_points1, 
-                             camera_matrix, 
-                             dist_coeffs, 
-                             rot_vec1, 
-                             trans_vec1,
-                             false,
-                             cv::SOLVEPNP_ITERATIVE
-                             );
-                std::cout << "Pose 1 Rotation Matrix 1 = " << rot_vec1 << std::endl;
-                std::cout << "Pose 1 Translation Matrix 1 = " << trans_vec1 << std::endl;
-                std::cout << "calling solvePNP for second image points..." << std::endl;
-                cv::Mat rot_vec2;
-                cv::Mat trans_vec2;
-                cv::solvePnP(obj_points,
-                             img_points2,
-                             camera_matrix,
-                             dist_coeffs,
-                             rot_vec2,
-                             trans_vec2,
-                             false,
-                             cv::SOLVEPNP_ITERATIVE
-                             );
-
-                std::cout << "Pose 2 Rotation Matrix 2 = " << rot_vec2 << std::endl;
-                std::cout << "Pose 2 Translation Matrix 2 = " << trans_vec2 << std::endl;
+                // compute descriptors
                 //
-                // extract camera motion from translation matrices
-                // 
-                // subtract trans_mat1 from trans_mat2, result is incremental
-                // camera motion
+                cv::Mat descriptors_2;
+                orb_detector->compute(gray2, keypoints2, descriptors_2);
+                cv::Mat descriptors3;
+                orb_detector->compute(gray3, keypoints3, descriptors3);
                 //
-                cv::Mat delta_trans = trans_vec2 - trans_vec1;
+                // filter descriptors and keypoints, rejecting features that do 
+                // not match closely enough, based on L2 norm()
                 //
-                // parse specific elements of transalation if needed
-                // to determine motion along x or y axes
+                max_rows = std::min(descriptors_2.rows, descriptors3.rows);
                 //
-                double x_trans = delta_trans.at<double>(0);
-                double y_trans = delta_trans.at<double>(1);
-                std::cout << "x translation = " << x_trans << std:: endl
-                          << "y translation = " << y_trans << std:: endl;
+                // initialize row to 0, auto type
+                //
+                row = max_rows - max_rows;
+                line_color = cv::Scalar(0, 255, 0);
+                cv::Mat image_tracked_4 = cv::imread(path3);
+                delta_x_sum = 0.0;
+                points2_final.clear();
+                std::vector<cv::Point2f> points3_final;
+                count = 0;
+                for (row = 0; row < max_rows; ++row) {
+                    cv::Mat row_mat2 = descriptors_2.row(row);
+                    cv::Mat row_mat3 = descriptors3.row(row);
+                    double dist = cv::norm(row_mat2 - row_mat3);
+                    if (dist < threshold) {
+                        //
+                        // descriptors match, use the points
+                        // draw lines and write image to file
+                        //
+                        // compute slope
+                        //
+                        double x1 = points2_trim[row].x;
+                        double y1 = points2_trim[row].y;
+                        double x2 = points3_trim[row].x;
+                        double y2 = points3_trim[row].y;
+                        double delta_y = abs(y2 - y1);
+                        ++count;
+                        delta_x_sum += (abs(x2 - x1));
+                        cv::line(image_tracked_4,
+                                points2_trim[row],
+                                points3_trim[row],
+                                line_color,
+                                line_thickness,
+                                line_type
+                                );
+                        points2_final.push_back(points2_trim[row]);
+                        points3_final.push_back(points3_trim[row]);
+                    }
+                    else {
+                        continue;
+                    }
+                }
+                double delta_x_ave = delta_x_sum/(double)count;
+                double img_width = (double)image_tracked_4.cols;
+                double percent_overlap = 100.0 * (img_width - delta_x_ave)/img_width;
+                std::string orb_tracked_trim_name_2 = "orb_tracked_image_trim_2.jpg";
+                std::stringstream tracked_trim_ss_2;
+                tracked_trim_ss_2 << homedir;
+                tracked_trim_ss_2 << base_path;
+                tracked_trim_ss_2 << orb_tracked_trim_name_2;
+                std::string tracked_trim_path_2;
+                tracked_trim_ss_2 >> tracked_trim_path_2;
+                cv::imwrite(tracked_trim_path_2, image_tracked_4); 
+                //
+                // calculate second essential matrix
+                //
+                cv::Mat inlier_mask_2;
+                std::cout << "calculating essential matrix 2..." << std::endl;
+                cv::Mat essential_mat_2 = cv::findEssentialMat(points2_final,
+                                                                points3_final,
+                                                                camera_matrix,
+                                                                cv::RANSAC,
+                                                                .99,
+                                                                1.0,
+                                                                inlier_mask_2);
+                std::cout << "Essential Matrix 2 = " << essential_mat_2 << std::endl;
+                //
+                // determine the relative rotation matrix, R, and relative 
+                // translation matrix, T between the first 2 camera positions.
+                //
+                cv::Mat rotation_mat_2;
+                cv::Mat translation_mat_2;                
+                //
+                // recover the second relative pose
+                //
+                cv::Mat pose_inlier_mask_2;
+                std::cout << "pose recovery 2..." << std::endl;
+                num_good_inliers = cv::recoverPose(essential_mat_2,
+                                                    points2_final,
+                                                    points3_final,
+                                                    camera_matrix,
+                                                    rotation_mat_2,
+                                                    translation_mat_2,
+                                                    distance_threshold,
+                                                    pose_inlier_mask_2);
+                if (num_good_inliers < 1) {
+                    std::cout << "pose recovery failed..." << std::endl;
+                }
+                else {
+                    std::cout << "number good inliers = " << num_good_inliers << std::endl;
+                    std::cout << "Recovered Pose Rotation Matrix = " << rotation_mat_2 << std::endl;
+                    std::cout << "Recovered Pose Translation Matrix = " << translation_mat_2 << std::endl;
+                }
+                //
+                // transform the camera pose, translation first
+                //
+                camera_pose_t = camera_pose_t + scale * (camera_pose_R * translation_mat_2);
+                camera_pose_R = camera_pose_R * rotation_mat_2;
+                //
+                // update the trajectory
+                //
+                curr_point.x = camera_pose_t.at<double>(0);
+                curr_point.y = camera_pose_t.at<double>(1);
+                curr_point.z = camera_pose_t.at<double>(2);
+                trajectory.push_back(curr_point);
+                //
+                // print out results
+                //
+                for (int i = 0; i < trajectory.size(); ++i) {
+                    std::cout << "pose " << i + 1 << ", x: " << trajectory[i].x 
+                                << ", y: " << trajectory[i].y << ", z: " 
+                                << trajectory[i].z << std::endl;
+                }
             }
             // end 
         }
