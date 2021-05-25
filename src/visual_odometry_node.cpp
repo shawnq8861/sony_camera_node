@@ -10,7 +10,7 @@
 #include <stdlib.h>
 #include <vector>
 
-static constexpr int max_points = 100;
+static constexpr int max_points = 300;
 static constexpr double threshold = 250.0;
 static constexpr double distance_threshold = 10.0;
 
